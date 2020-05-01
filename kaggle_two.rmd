@@ -1,0 +1,220 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("tidyverse")
+library("tidymodels")
+#library("tidyimpute")
+#library("plotly")
+library("skimr")
+library("caret")
+#library("na.tools")
+```
+
+```{r}
+dfTest <- read.csv("TestClean_updated_one.csv")
+dfTrain <- read.csv("TrainClean_updated_one.csv")
+
+dfTrain <- dfTrain %>% select(-X)
+
+```
+
+```{r}
+dfTrain$high_booking_rate <- as.factor(dfTrain$high_booking_rate)
+#dfTrain$room_type <- as.factor(dfTrain$room_type)
+#dfTrain$bed_type <- as.factor(dfTrain$bed_type)
+#dfTrain$host_verification <- as.factor(dfTrain$host_verification)
+#dfTrain$security_deposit <- as.factor(dfTrain$security_deposit)
+#dfTrain$host_since <- as.character(dfTrain$host_since)
+#dfTrain$price <- as.factor(dfTrain$price)
+#dfTrain$is_location_exact <- as.factor(dfTrain$is_location_exact)
+dfTrain$instant_bookable <- as.factor(dfTrain$instant_bookable)
+#dfTrain$cleaning_fee <- as.factor(dfTrain$cleaning_fee)
+dfTrain$host_is_superhost <- as.factor(dfTrain$host_is_superhost)
+#dfTrain$host_identity_verified <- as.factor(dfTrain$host_identity_verified)
+dfTrain$state <- as.character(dfTrain$state)
+dfTrain$city <- as.character(dfTrain$city)
+#dfTrain$property_type <- as.character(dfTrain$property_type)
+
+#dfTest$room_type <- as.factor(dfTest$room_type)
+#dfTest$bed_type <- as.factor(dfTest$bed_type)
+#dfTest$host_verification <- as.factor(dfTest$host_verification)
+#dfTest$security_deposit <- as.factor(dfTest$security_deposit)
+#dfTest$host_since <- as.character(dfTest$host_since)
+#dfTest$price <- as.factor(dfTest$price)
+#dfTest$is_location_exact <- as.factor(dfTest$is_location_exact)
+dfTest$instant_bookable <- as.factor(dfTest$instant_bookable)
+#dfTest$cleaning_fee <- as.factor(dfTest$cleaning_fee)
+dfTest$host_is_superhost <- as.factor(dfTest$host_is_superhost)
+dfTest$host_identity_verified <- as.factor(dfTest$host_identity_verified)
+dfTest$state <- as.character(dfTest$state)
+dfTest$city <- as.character(dfTest$city)
+#dfTest$property_type <- as.character(dfTest$property_type)
+
+```
+
+```{r}
+skim(dfTrain)
+```
+```{r}
+skim(dfTest)
+```
+
+```{r}
+dfTest$state <- ifelse(is.na(dfTest$state),"CA",dfTest$host_is_superhost)
+
+```
+
+```{r}
+dfLda  <- train(high_booking_rate ~ .-(id), data= dfTrain, method= 'lda',trControl=trainControl(method='cv', number=10))
+
+summary(dfLda)
+```
+
+```{r}
+resultsLda <- 
+  dfLda %>% 
+  predict(dfTest, type= 'prob') %>% 
+  bind_cols(dfTest, preictedProb=.)
+resultsLda
+  
+```
+
+```{r}
+lambdaValues <- 10^seq(-3, 3, length = 100)
+set.seed(123)
+
+fitLasso <- train(high_booking_rate ~ .-(id+property_type), family='binomial', data=dfTrain, method='glmnet', trControl=trainControl(method='cv', number=10), tuneGrid = expand.grid(alpha=1, lambda=lambdaValues))
+
+summary(fitLasso)
+
+```
+
+```{r}
+resultsLasso <-
+  fitLasso %>% 
+    predict(dfTest, type= 'prob') %>%      
+    bind_cols(dfTest, predictedProb=.)
+resultsLasso
+
+```
+
+```{r}
+#Variable importance complete table
+varImp(fitLasso)$importance %>%    # Add scale=FALSE inside VarImp if you don't want to scale
+  rownames_to_column(var = "Variable") %>%
+  mutate(Importance = scales::percent(Overall/100)) %>% 
+  arrange(desc(Overall)) %>% 
+  as_tibble()
+
+#Variable importance plot with the most important variables
+plot(varImp(fitLasso), top=20)    # Add top = XX to change the number of visible variables
+
+```
+
+
+```{r}
+
+dfknn <- train(high_booking_rate ~ .-(X+id), data= dfTrain, method= 'knn', trControl=trainControl(method='cv', number=10), tuneLength=1, preProcess=c("center","scale"),na.action = na.fail
+               )
+
+```
+
+
+```{r}
+resultsknn <- 
+  
+    dfknn %>% 
+    predict(dfTest, type= 'prob') %>%      
+    bind_cols(dfTest, predictedRate=.)
+  resultsknn
+```
+
+```{r}
+modelLog <- glm(high_booking_rate~.-(id),dfTrain,family = "binomial")
+summary(modelLog)
+```
+```{r}
+resultsLog <- 
+  modelLog %>% 
+  predict(dfTest, type='response') %>% 
+  bind_cols(dfTest,predictedProb=.)
+
+resultsLog
+```
+
+
+
+
+```{r}
+modelCaretLog <- 
+  train(high_booking_rate~.-(X+id),data = dfTrain,family="binomial",method="glm")
+
+summary(modelCaretLog)
+```
+
+```{r}
+resultsCaretLog <- 
+  modelCaretLog %>% 
+  predict(dfTest, type='prob') %>% 
+  bind_cols(dfTest, predcitedProb=.)
+
+resultsCaretLog
+```
+
+
+
+```{r}
+dfQda  <- train(high_booking_rate ~ .-(X+id), data= dfTrain, method= 'qda',trControl=trainControl(method='cv', number=10))
+
+summary(dfQda)
+```
+
+```{r}
+resultsQda <- 
+  dfQda %>% 
+  predict(dfTest, type= 'prob') %>% 
+  bind_cols(dfTest, predcitedProb=.)
+resultsQda
+```
+
+
+```{r}
+modelOut <- resultsCaretLog %>% select(id,`1`)
+write.csv(modelOut,"kaggle_three.csv")
+```
+
+```{r}
+modelOut2 <- resultsLda %>% select(id,`1`)
+write.csv(modelOut2,"kaggle_four.csv")
+
+
+```
+
+```{r}
+modelOut3 <- resultsLasso %>% select(id,`1`)
+write.csv(modelOut3,"kaggle_five.csv")
+
+```
+
+```{r}
+modelOut4 <- resultsLog %>% select(id,predictedProb)
+write.csv(modelOut4,"kaggle_six.csv")
+
+
+```
+
+```{r}
+modelOut5 <- resultsQda %>% select(id,`1`)
+write.csv(modelOut5,"kaggle_seven.csv")
+
+```
+
+```{r}
+modelOut6 <- resultsknn %>% select(id,`1`)
+write.csv(modelOut6,"kaggle_six.csv")
+
+
+```

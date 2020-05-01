@@ -1,0 +1,164 @@
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("tidyverse")
+library("tidymodels")
+library("skimr")
+library("caret")
+library("plyr")
+```
+
+
+
+```{r}
+dfTest <- read.csv("TestClean.csv")
+dfTrain <- read.csv("TrainClean.csv")
+
+dfTest <- dfTest %>% select(-host_identity_verified) %>% select(-host_is_superhost) %>% select(-state)
+dfTrain <- dfTrain %>% select(-host_identity_verified) %>% select(-host_is_superhost) %>% select(-state)
+```
+
+
+```{r}
+dfTrain$high_booking_rate <- as.factor(dfTrain$high_booking_rate)
+#dfTest$property_type <- plyr::revalue(df$Test, c("Minsu(Taiwan)"="House"))
+```
+
+```{r}
+skim(dfTrain)
+```
+
+```{r}
+skim(dfTest)
+```
+
+
+```{r}
+#dfTest$state <- ifelse(is.na(dfTest$state),"Western",dfTest$state)
+#dfTrain$state <- ifelse(is.na(dfTrain$state),"Western",dfTrain$state)
+
+
+
+#dfTest$property_type <- as.factor(ifelse(dfTest$property_type=="Minsu (Taiwan)","House",dfTest$property_type))
+#dfTest$property_type <- (dfTest$property_type=="Minsu (Taiwan)","House",dfTest$property_type)
+
+```
+
+
+
+```{r}
+#dfTrain$high_booking_rate <- as.factor(dfTrain$high_booking_rate)
+#dfTrain$room_type <- as.factor(dfTrain$room_type)
+#dfTrain$bed_type <- as.factor(dfTrain$bed_type)
+#dfTrain$host_verification <- as.factor(dfTrain$host_verification)
+#dfTrain$security_deposit <- as.factor(dfTrain$security_deposit)
+#dfTrain$host_since <- as.character(dfTrain$host_since)
+#dfTrain$price <- as.factor(dfTrain$price)
+#dfTrain$is_location_exact <- as.factor(dfTrain$is_location_exact)
+dfTrain$instant_bookable <- as.factor(dfTrain$instant_bookable)
+#dfTrain$cleaning_fee <- as.factor(dfTrain$cleaning_fee)
+#dfTrain$host_is_superhost <- as.factor(dfTrain$host_is_superhost)
+#dfTrain$host_identity_verified <- as.factor(dfTrain$host_identity_verified)
+#dfTrain$state <- as.character(dfTrain$state)
+#dfTrain$city <- as.character(dfTrain$city)
+#dfTrain$property_type <- as.character(dfTrain$property_type)
+
+#dfTest$room_type <- as.factor(dfTest$room_type)
+#dfTest$bed_type <- as.factor(dfTest$bed_type)
+#dfTest$host_verification <- as.factor(dfTest$host_verification)
+#dfTest$security_deposit <- as.factor(dfTest$security_deposit)
+#dfTest$host_since <- as.character(dfTest$host_since)
+#dfTest$price <- as.factor(dfTest$price)
+#dfTest$is_location_exact <- as.factor(dfTest$is_location_exact)
+dfTest$instant_bookable <- as.factor(dfTest$instant_bookable)
+#dfTest$cleaning_fee <- as.factor(dfTest$cleaning_fee)
+#dfTest$host_is_superhost <- as.factor(dfTest$host_is_superhost)
+#dfTest$host_identity_verified <- as.factor(dfTest$host_identity_verified)
+#dfTest$state <- as.character(dfTest$state)
+#dfTest$city <- as.character(dfTest$city)
+#dfTest$property_type <- as.character(dfTest$property_type)
+
+```
+
+```{r}
+dfTestpt <- dfTest %>% select(-property_type)
+dfTrainpt <- dfTrain %>% select(-property_type)
+```
+
+```{r}
+set.seed(123)
+
+fitLda <- train(high_booking_rate ~ .-(id),  data=dfTrainpt, method='glm', trControl=trainControl(method='cv', number=10)) %>% 
+  predict(dfTestpt, type= 'prob') %>%      
+  bind_cols(dfTestpt, predictedProb=.)
+fitLda
+
+
+
+
+```
+```{r}
+summary(fitLda)
+```
+
+
+```{r}
+fitLog <- 
+  train(high_booking_rate~.-(id),data = dfTrain, family="binomial",trControl=trainControl(method='cv', number=10),method='glm')
+
+summary(fitLog)
+```
+
+
+```{r}
+lambdaValues <- 10^seq(-3, 3, length = 100)
+set.seed(123)
+
+fitNet <- train(high_booking_rate ~ .-(id), family='binomial', data=dfTrain, method='rf', trControl=trainControl(method='cv', number=10))
+
+summary(fitNet)
+
+```
+
+```{r}
+resultsNet <-
+  fitNet %>% 
+    predict(dfTest, type= 'prob') %>%      
+    bind_cols(dfTest, predictedProb=.)
+resultsNet
+
+```
+
+```{r}
+#Variable importance complete table
+varImp(fitNet)$importance %>%    # Add scale=FALSE inside VarImp if you don't want to scale
+  rownames_to_column(var = "Variable") %>%
+  mutate(Importance = scales::percent(Overall/100)) %>% 
+  arrange(desc(Overall)) %>% 
+  as_tibble()
+```
+
+
+```{r}
+#Variable importance plot with the most important variables
+plot(varImp(fitNet), bottom=20)    # Add top = XX to change the number of visible variables
+
+```
+
+
+```{r}
+out4 <- resultsNet %>% select(id,`1`)
+
+write.csv(out4,"out4.csv")
+```
+
+
+
+
+
+
+
